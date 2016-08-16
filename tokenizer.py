@@ -8,134 +8,147 @@ Created on Sat Aug  6 20:52:54 2016
 import nltk
 import sys
 import MySQLdb as mdb
+from nltk.stem.wordnet import WordNetLemmatizer
+from nltk.stem.snowball import SnowballStemmer
 
+equivalence = WordNetLemmatizer()
 cb = __import__('chatBot')
 
-from nltk.stem.wordnet import WordNetLemmatizer
-equivalence = WordNetLemmatizer()
 
-class SymptomAttr:
-    def __init__(self):
-        self.name = ''
-        self.site = ''
-        self.onset = ''
-        self.severity = ''
-        self.duration = ''
+symptom_attribute = {'name': '', 'site': '', 'onset': '', 'severity': '',
+           'pattern': '', 'duration': ''}
 
-class Symptom:
-    def __init__(self):
-        self.name = ''
-        self.site = ''
-        self.onset = ''
-        self.severity = ''
-        self.duration = ''
-
-    def __str__(self):
-        return "Name: " + self.name + '\n' + "Site: " + self.site + '\n' \
-        "Onset: " + self.onset + '\n' + "Severity: " + self.severity + '\n' \
-        "Duration: " + self.duration + '\n'
-
-
-#ask user the supplied question and return answer
 def ask_input(question):
+    # ask user the supplied question and return answer
     answer = input(question).lower()
     return answer
 
+
 def tag_input(str):
-    #tagging input using nltk.pos_tag()
+    # tagging input using nltk.pos_tag()
     input_tokens = nltk.word_tokenize(str)
-    tagged_input = nltk.pos_tag(input_tokens)
-    return tagged_input
-
-user_input = ask_input("What symptom is seen in you?\n")
-tagged_input = tag_input(user_input)
-
-severity_list = ['high', 'moderate', 'low']
-onset_list = ['sudden', 'gradual']
-
-#Importing site list from file 'site_list' and saving it to list
-site_list = []
-site_file = open('site_list', 'r')
-file_content = site_file.read().lower()
-site_list = file_content.splitlines()
-
-#Importing symptoms list from database and saving it to list
-sympt = Symptom()
+    tagged_str = nltk.pos_tag(input_tokens)
+    return tagged_str
 
 
-#comparing each noun from tagged input to symptoms list
-lemmatized_noun = []
-noun_phrase = list((word for (word, tag) in tagged_input if tag == 'NN'))
-for word in noun_phrase:
-    lemmatized_noun.append(equivalence.lemmatize(word))
+def parse_symptom(lemmatized_noun, lemmatized_adj, symptom):
+    try:
+        con = mdb.connect('localhost', 'sandesh', 'letmein', 'disease_prediction');
 
-lemmatized_adj = []
-adj_phrase = list((word for (word, tag) in tagged_input if tag == 'JJ'))
-for word in adj_phrase:
-    lemmatized_adj.append(equivalence.lemmatize(word))
+        cur = con.cursor(mdb.cursors.DictCursor)
 
-try:
-    con = mdb.connect('localhost', 'sandesh', 'letmein', 'disease_prediction');
+        combined_list = lemmatized_adj + lemmatized_noun
+        for word in combined_list:
+            cur.execute(
+                "SELECT * FROM symptoms_attribute WHERE Symptom = %s",
+                (word,)
+            )
 
-    cur = con.cursor(mdb.cursors.DictCursor)
+            row = cur.fetchone()
+            if row:
+                sympAttr['name'] = row["Symptom"].lower()
+                symptom['name']= row["Symptom"].lower()
 
-    for noun in lemmatized_noun:
-        cur.execute(
-            "SELECT * FROM symptoms_attribute WHERE Symptom = %s",
-            (noun,)
-        )
+                sympAttr['site'] = row["Site"]
+                sympAttr['onset'] = row["Onset"]
+                sympAttr['severity'] = row["Severity"]
+                sympAttr['pattern'] = row["Pattern"]
+                sympAttr['duration'] = row["Duration"]
 
-        row = cur.fetchone()
-        if row:
-            sympAttr = SymptomAttr()
+    except mdb.Error as e:
+        print("Error %d: %s" % (e.args[0], e.args[1]))
+        sys.exit(1)
 
-            sympAttr.name = row["Symptom"].lower()
-            sympt.name = row["Symptom"].lower()
-
-            sympAttr.site = row["Site"]
-            sympAttr.onset = row["Onset"]
-            sympAttr.pattern = row["Pattern"]
-            sympAttr.severity = row["Severity"]
-            sympAttr.duration = row["Duration"]
+    finally:
+        if con:
+            con.close()
 
 
-except mdb.Error as e:
-    print("Error %d: %s" % (e.args[0], e.args[1]))
-    sys.exit(1)
+def parse_symptom_attr(noun_list, adj_list, adv_list, symptom, attribute_name):
+    severity_list = ['high', 'moderate', 'low']
+    onset_list = ['sudden', 'gradual']
+    duration_list = ['day', 'week', 'hour']
+    pattern_list = ['continuous', 'intermittent']
 
-finally:
-    if con:
-        con.close()
+    # Importing site list from file 'site_list' and saving it to list
+    site_file = open('site_list', 'r')
+    file_content = site_file.read().lower()
+    site_list = file_content.splitlines()
 
-if sympt.name != '':
-    for noun in lemmatized_noun:
-        for site in site_list:
-            if noun == site:
-                sympt.site = noun
+    if attribute_name == '' or attribute_name == 'site':
+        for noun in noun_list:
+            for site in site_list:
+                if noun == site:
+                    symptom['site'] = noun
 
-if sympt.name != '':
-    for adj in lemmatized_adj:
-        for word in severity_list:
-            if adj == word:
-                sympt.severity = adj
+    if attribute_name == '' or attribute_name == 'severity':
+        for adj in adj_list:
+            for word in severity_list:
+                if adj == word:
+                    symptom['severity'] = adj
 
-if sympt.name != '':
-    for adj in lemmatized_adj:
-        for word in onset_list:
-            if adj == word:
-                sympt.onset = adj
+    if attribute_name == '' or attribute_name == 'onset':
+        for adj in adj_list:
+            for word in onset_list:
+                if adj == word:
+                    symptom['onset'] = adj
 
-#Ask for required attribute of symptom
-if sympt.name != '':
-    if sympAttr.site == 'required' and sympt.site == '':
-        ques = cb.ask('site')
-        sympt.site = input(ques)
-    if sympAttr.onset == 'required' and sympt.onset == '':
-        ques = cb.ask('onset')
-        sympt.onset = input(ques)
+        for adv in adv_list:
+            for word in onset_list:
+                if adv == word:
+                    symptom['onset'] = adv
 
-print(sympt)
+    if attribute_name == '' or attribute_name == 'duration':
+        for noun in noun_list:
+            for duration in duration_list:
+                if noun == duration:
+                    symptom['duration'] = noun
+
+    if attribute_name == '' or attribute_name == 'pattern':
+        for adj in adj_list:
+            for word in pattern_list:
+                if adj == word:
+                    symptom['pattern'] = adj
+
+        for noun in noun_list:
+            for word in pattern_list:
+                if noun == word:
+                    symptom['pattern'] = noun
 
 
-#for word in site_list:
-#    print(word)
+def classify_input(user_input, sympt, attribute=''):
+    tagged_input = tag_input(user_input)
+
+    stemmer = SnowballStemmer("english")
+    # comparing each noun from tagged input to symptoms list
+    lemmatized_noun = []
+    noun_phrase = list((word for (word, tag) in tagged_input if tag == 'NN' or tag == 'NNS'))
+    for word in noun_phrase:
+        lemmatized_noun.append(equivalence.lemmatize(word))
+
+    lemmatized_adj = []
+    adj_phrase = list((word for (word, tag) in tagged_input if tag == 'JJ'))
+    for word in adj_phrase:
+        lemmatized_adj.append(equivalence.lemmatize(word))
+
+    lemmatized_adv = []
+    adv_phrase = list((word for (word, tag) in tagged_input if tag == 'RB'))
+    for word in adv_phrase:
+        lemmatized_adv.append(stemmer.stem(equivalence.lemmatize(word)))
+
+    if sympt['name'] == '':
+        parse_symptom(lemmatized_noun, lemmatized_adj, sympt)
+        parse_symptom_attr(lemmatized_noun, lemmatized_adj, lemmatized_adv, sympt, attribute)
+    else:
+        parse_symptom_attr(lemmatized_noun, lemmatized_adj, lemmatized_adv, sympt, attribute)
+
+    for key in sympt:
+        if key == 'name':
+            continue
+        elif not sympt['name'] == '':
+            if sympAttr[key] == 'required' and sympt[key] == '':
+                ques = cb.ask(key)
+                classify_input(input(ques), sympt, key)
+
+
+sympAttr = dict(symptom_attribute)
