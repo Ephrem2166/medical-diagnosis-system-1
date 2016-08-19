@@ -18,6 +18,7 @@ cb = __import__('chatBot')
 symptom_attribute = {'name': '', 'site': '', 'onset': '', 'severity': '',
            'pattern': '', 'duration': ''}
 
+
 def ask_input(question):
     # ask user the supplied question and return answer
     answer = input(question).lower()
@@ -65,10 +66,10 @@ def parse_symptom(lemmatized_noun, lemmatized_adj, symptom):
 
 
 def parse_symptom_attr(noun_list, adj_list, adv_list, symptom, attribute_name):
-    severity_list = ['high', 'moderate', 'low']
-    onset_list = ['sudden', 'gradual']
+    severity_list = ['high', 'moder', 'low', 'mild', 'sever']
+    onset_list = ['sudden', 'gradual', 'acut', 'insidi']
     duration_list = ['day', 'week', 'hour']
-    pattern_list = ['continuous', 'intermittent']
+    pattern_list = ['continu', 'intermitt']
 
     # Importing site list from file 'site_list' and saving it to list
     site_file = open('site_list', 'r')
@@ -124,12 +125,12 @@ def classify_input(user_input, sympt, attribute=''):
     lemmatized_noun = []
     noun_phrase = list((word for (word, tag) in tagged_input if tag == 'NN' or tag == 'NNS'))
     for word in noun_phrase:
-        lemmatized_noun.append(equivalence.lemmatize(word))
+        lemmatized_noun.append(stemmer.stem(equivalence.lemmatize(word)))
 
     lemmatized_adj = []
-    adj_phrase = list((word for (word, tag) in tagged_input if tag == 'JJ'))
+    adj_phrase = list((word for (word, tag) in tagged_input if tag == 'JJ' or tag == 'VBG' ))
     for word in adj_phrase:
-        lemmatized_adj.append(equivalence.lemmatize(word))
+        lemmatized_adj.append(stemmer.stem(equivalence.lemmatize(word)))
 
     lemmatized_adv = []
     adv_phrase = list((word for (word, tag) in tagged_input if tag == 'RB'))
